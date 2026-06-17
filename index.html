@@ -3,22 +3,21 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Breakout - Matter.js</title>
+  <title>Physics Simulation - Matter.js</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="game-container">
-    <div id="hud">
-      <span>Score: <span id="score">0</span></span>
-      <span>Vies: <span id="lives">3</span></span>
+  <div id="container">
+    <div id="toolbar">
+      <button data-shape="box" class="active">⬛ Boîte</button>
+      <button data-shape="circle">● Cercle</button>
+      <button data-shape="polygon">⬡ Polygone</button>
+      <button data-shape="ragdoll">🦴 Ragdoll</button>
+      <span id="count">Objets: 0</span>
+      <button id="clear-btn">🗑️ Tout effacer</button>
     </div>
     <div id="canvas-wrapper">
-      <canvas id="game-canvas"></canvas>
-    </div>
-    <div id="overlay" class="hidden">
-      <h2 id="overlay-title">Breakout</h2>
-      <p id="overlay-message">Cliquez pour commencer</p>
-      <button id="overlay-btn">Jouer</button>
+      <canvas id="canvas"></canvas>
     </div>
   </div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>

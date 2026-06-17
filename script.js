@@ -1,242 +1,269 @@
 const {
-  Engine, World, Bodies, Body, Events, Composite, Vector, Runner
+  Engine, World, Bodies, Body, Events, Composite, Vector, Constraint, Mouse, MouseConstraint
 } = Matter;
 
-const COLS = 10;
-const ROWS = 6;
-const BRICK_W = 70;
-const BRICK_H = 28;
-const PADDLE_W = 120;
-const PADDLE_H = 16;
-const BALL_R = 9;
-const WALL = 20;
-const CANVAS_W = COLS * BRICK_W + WALL * 2;
-const CANVAS_H = 560;
+const W = 1000;
+const H = 640;
 
-const COLORS = ['#e94560', '#f5a623', '#f7d44a', '#4ecdc4', '#45b7d1', '#96ceb4'];
-
-let score = 0;
-let lives = 3;
-let gameState = 'menu';
-
-const canvas = document.getElementById('game-canvas');
+const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
-canvas.width = CANVAS_W;
-canvas.height = CANVAS_H;
+canvas.width = W;
+canvas.height = H;
 
-const engine = Engine.create({ gravity: { x: 0, y: 0 } });
+const engine = Engine.create({ gravity: { x: 0, y: 1 } });
 const world = engine.world;
 
-let paddle, ball, bricks = [];
-let isLaunching = true;
+let shapeMode = 'box';
+let bodyCount = 0;
 
-function createWalls() {
-  const opts = { isStatic: true, restitution: 1, friction: 0, label: 'wall' };
-  const thick = 60;
-  return [
-    Bodies.rectangle(CANVAS_W / 2, -thick / 2, CANVAS_W + 200, thick, opts),
-    Bodies.rectangle(-thick / 2, CANVAS_H / 2, thick, CANVAS_H + 200, opts),
-    Bodies.rectangle(CANVAS_W + thick / 2, CANVAS_H / 2, thick, CANVAS_H + 200, opts),
+const colors = ['#6c5ce7', '#fd79a8', '#00cec9', '#fdcb6e', '#e17055', '#00b894', '#0984e3', '#e84393'];
+
+function randomColor() {
+  return colors[Math.floor(Math.random() * colors.length)];
+}
+
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function createGround() {
+  const ground = Bodies.rectangle(W / 2, H + 30, W + 200, 80, { isStatic: true, label: 'ground' });
+  const leftWall = Bodies.rectangle(-30, H / 2, 60, H + 200, { isStatic: true, label: 'wall' });
+  const rightWall = Bodies.rectangle(W + 30, H / 2, 60, H + 200, { isStatic: true, label: 'wall' });
+  Composite.add(world, [ground, leftWall, rightWall]);
+}
+
+function spawnBox(x, y) {
+  const size = randomInt(20, 50);
+  const body = Bodies.rectangle(x, y, size, size, {
+    restitution: 0.1,
+    friction: 0.6,
+    density: 0.002,
+    chamfer: { radius: 2 },
+    render: { fillStyle: randomColor() }
+  });
+  Composite.add(world, body);
+  bodyCount++;
+  return body;
+}
+
+function spawnCircle(x, y) {
+  const r = randomInt(10, 28);
+  const body = Bodies.circle(x, y, r, {
+    restitution: 0.4,
+    friction: 0.3,
+    density: 0.002,
+    render: { fillStyle: randomColor() }
+  });
+  Composite.add(world, body);
+  bodyCount++;
+  return body;
+}
+
+function spawnPolygon(x, y) {
+  const sides = randomInt(5, 8);
+  const r = randomInt(18, 35);
+  const body = Bodies.polygon(x, y, sides, r, {
+    restitution: 0.15,
+    friction: 0.5,
+    density: 0.002,
+    chamfer: { radius: 2 },
+    render: { fillStyle: randomColor() }
+  });
+  Composite.add(world, body);
+  bodyCount++;
+  return body;
+}
+
+function spawnRagdoll(x, y) {
+  const parts = [];
+  const head = Bodies.circle(x, y - 40, 16, {
+    restitution: 0.2, friction: 0.5, render: { fillStyle: '#fd79a8' }
+  });
+  const torso = Bodies.rectangle(x, y, 32, 50, {
+    restitution: 0.1, friction: 0.5, chamfer: { radius: 3 }, render: { fillStyle: '#6c5ce7' }
+  });
+  const armL = Bodies.rectangle(x - 28, y - 8, 22, 10, {
+    restitution: 0.1, friction: 0.5, chamfer: { radius: 2 }, render: { fillStyle: '#a29bfe' }
+  });
+  const armR = Bodies.rectangle(x + 28, y - 8, 22, 10, {
+    restitution: 0.1, friction: 0.5, chamfer: { radius: 2 }, render: { fillStyle: '#a29bfe' }
+  });
+  const legL = Bodies.rectangle(x - 12, y + 42, 14, 28, {
+    restitution: 0.1, friction: 0.5, chamfer: { radius: 2 }, render: { fillStyle: '#74b9ff' }
+  });
+  const legR = Bodies.rectangle(x + 12, y + 42, 14, 28, {
+    restitution: 0.1, friction: 0.5, chamfer: { radius: 2 }, render: { fillStyle: '#74b9ff' }
+  });
+
+  parts.push(head, torso, armL, armR, legL, legR);
+
+  Composite.add(world, parts);
+
+  const constraints = [
+    { bodyA: head, bodyB: torso, pointA: { x: 0, y: 16 }, pointB: { x: 0, y: -25 } },
+    { bodyA: torso, bodyB: armL, pointA: { x: 0, y: -8 }, pointB: { x: 11, y: 0 } },
+    { bodyA: torso, bodyB: armR, pointA: { x: 0, y: -8 }, pointB: { x: -11, y: 0 } },
+    { bodyA: torso, bodyB: legL, pointA: { x: 0, y: 25 }, pointB: { x: 7, y: 0 } },
+    { bodyA: torso, bodyB: legR, pointA: { x: 0, y: 25 }, pointB: { x: -7, y: 0 } },
   ];
-}
 
-function createPaddle() {
-  return Bodies.rectangle(CANVAS_W / 2, CANVAS_H - 40, PADDLE_W, PADDLE_H, {
-    isStatic: true, label: 'paddle', chamfer: { radius: 4 }
-  });
-}
-
-function createBall() {
-  return Bodies.circle(CANVAS_W / 2, CANVAS_H - 70, BALL_R, {
-    restitution: 1, friction: 0, frictionAir: 0, density: 0.002, label: 'ball'
-  });
-}
-
-function createBricks() {
-  const bricks = [];
-  for (let row = 0; row < ROWS; row++) {
-    for (let col = 0; col < COLS; col++) {
-      const x = WALL + col * BRICK_W + BRICK_W / 2;
-      const y = 80 + row * BRICK_H + BRICK_H / 2;
-      const brick = Bodies.rectangle(x, y, BRICK_W - 4, BRICK_H - 4, {
-        isStatic: true, label: 'brick', chamfer: { radius: 3 },
-        render: { color: COLORS[row % COLORS.length] }
-      });
-      brick.row = row;
-      brick.col = col;
-      bricks.push(brick);
-    }
+  for (const c of constraints) {
+    Composite.add(world, Constraint.create({
+      ...c,
+      stiffness: 0.9,
+      damping: 0.2,
+      render: { visible: false }
+    }));
   }
-  return bricks;
+
+  bodyCount += parts.length;
+  return parts;
 }
 
-function launchBall() {
-  const angle = -Math.PI / 2 + (Math.random() - 0.5) * 0.8;
-  const speed = 7;
-  Body.setVelocity(ball, { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed });
-  isLaunching = false;
-}
-
-function resetBall() {
-  Body.setPosition(ball, { x: CANVAS_W / 2, y: CANVAS_H - 70 });
-  Body.setVelocity(ball, { x: 0, y: 0 });
-  isLaunching = true;
-}
-
-function setup() {
+function clearAll() {
+  const bodies = Composite.allBodies(world);
+  const staticBodies = bodies.filter(b => b.label === 'ground' || b.label === 'wall');
   Composite.clear(world, false);
-
-  const walls = createWalls();
-  paddle = createPaddle();
-  ball = createBall();
-  bricks = createBricks();
-
-  Composite.add(world, [...walls, paddle, ball, ...bricks]);
+  Composite.add(world, staticBodies);
+  bodyCount = 0;
 }
 
-Events.on(engine, 'collisionStart', (event) => {
-  for (const pair of event.pairs) {
-    const { bodyA, bodyB } = pair;
-    const brick = bodyA.label === 'brick' ? bodyA : bodyB.label === 'brick' ? bodyB : null;
-
-    if (brick && bricks.includes(brick)) {
-      Composite.remove(world, brick);
-      bricks = bricks.filter(b => b !== brick);
-      score += 10;
-      document.getElementById('score').textContent = score;
-
-      if (bricks.length === 0) {
-        endGame('win');
-      }
+function getShapeAt(mx, my) {
+  const bodies = Composite.allBodies(world);
+  for (let i = bodies.length - 1; i >= 0; i--) {
+    if (bodies[i].label === 'ground' || bodies[i].label === 'wall') continue;
+    if (Matter.Vertices.contains(bodies[i].vertices, { x: mx, y: my })) {
+      return bodies[i];
     }
+  }
+  return null;
+}
 
-    if (bodyA.label === 'ball' && bodyB.label === 'paddle' ||
-        bodyB.label === 'ball' && bodyA.label === 'paddle') {
-      const p = bodyA.label === 'paddle' ? bodyA : bodyB;
-      const b = bodyA.label === 'ball' ? bodyA : bodyB;
-      const diff = b.position.x - p.position.x;
-      const angle = -Math.PI / 2 + (diff / (PADDLE_W / 2)) * 0.8;
-      const speed = Math.sqrt(b.velocity.x ** 2 + b.velocity.y ** 2) || 7;
-      Body.setVelocity(b, { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed });
-    }
+let dragBody = null;
+let dragOffset = { x: 0, y: 0 };
+
+canvas.addEventListener('mousedown', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) * (W / rect.width);
+  const my = (e.clientY - rect.top) * (H / rect.height);
+
+  const clicked = getShapeAt(mx, my);
+  if (clicked && clicked.label !== 'ground' && clicked.label !== 'wall') {
+    dragBody = clicked;
+    dragOffset.x = clicked.position.x - mx;
+    dragOffset.y = clicked.position.y - my;
+    Body.setStatic(clicked, true);
+    return;
+  }
+
+  switch (shapeMode) {
+    case 'box': spawnBox(mx, my); break;
+    case 'circle': spawnCircle(mx, my); break;
+    case 'polygon': spawnPolygon(mx, my); break;
+    case 'ragdoll': spawnRagdoll(mx, my); break;
+  }
+  updateCount();
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  if (!dragBody) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) * (W / rect.width);
+  const my = (e.clientY - rect.top) * (H / rect.height);
+  Body.setPosition(dragBody, { x: mx + dragOffset.x, y: my + dragOffset.y });
+});
+
+canvas.addEventListener('mouseup', () => {
+  if (dragBody) {
+    Body.setStatic(dragBody, false);
+    dragBody = null;
   }
 });
 
-Events.on(engine, 'beforeUpdate', () => {
-  if (gameState !== 'playing') return;
-
-  if (ball.position.y > CANVAS_H + 50) {
-    lives--;
-    document.getElementById('lives').textContent = lives;
-    if (lives <= 0) {
-      endGame('lose');
-    } else {
-      resetBall();
-    }
-  }
-
-  if (Math.abs(ball.velocity.x) < 0.1) {
-    Body.setVelocity(ball, { x: 1 + Math.random() * 2, y: ball.velocity.y });
-  }
-  if (Math.abs(ball.velocity.y) < 0.1) {
-    Body.setVelocity(ball, { x: ball.velocity.x, y: -4 });
-  }
+document.querySelectorAll('#toolbar button[data-shape]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#toolbar button[data-shape]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    shapeMode = btn.dataset.shape;
+  });
 });
 
-function endGame(result) {
-  gameState = 'over';
-  const overlay = document.getElementById('overlay');
-  overlay.classList.remove('hidden');
-  document.getElementById('overlay-title').textContent = result === 'win' ? 'Victoire !' : 'Game Over';
-  document.getElementById('overlay-message').textContent =
-    result === 'win' ? `Bravo ! Score: ${score}` : `Score final: ${score}`;
-  document.getElementById('overlay-btn').textContent = 'Rejouer';
+document.getElementById('clear-btn').addEventListener('click', () => {
+  clearAll();
+  updateCount();
+});
+
+function updateCount() {
+  document.getElementById('count').textContent = `Objets: ${bodyCount}`;
 }
 
 function draw() {
-  ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+  ctx.clearRect(0, 0, W, H);
 
-  for (const body of Composite.allBodies(world)) {
-    if (body.label === 'wall') continue;
+  const bodies = Composite.allBodies(world);
 
+  for (const body of bodies) {
+    if (body.label === 'ground' || body.label === 'wall') {
+      ctx.fillStyle = '#1a1a3e';
+      ctx.beginPath();
+      const v = body.vertices;
+      ctx.moveTo(v[0].x, v[0].y);
+      for (let i = 1; i < v.length; i++) ctx.lineTo(v[i].x, v[i].y);
+      ctx.closePath();
+      ctx.fill();
+      continue;
+    }
+
+    const color = body.render?.fillStyle || '#6c5ce7';
     const verts = body.vertices;
+
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 8;
     ctx.beginPath();
     ctx.moveTo(verts[0].x, verts[0].y);
-    for (let i = 1; i < verts.length; i++) {
-      ctx.lineTo(verts[i].x, verts[i].y);
-    }
+    for (let i = 1; i < verts.length; i++) ctx.lineTo(verts[i].x, verts[i].y);
     ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
 
-    if (body.label === 'brick') {
-      ctx.fillStyle = body.render?.color || '#e94560';
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    } else if (body.label === 'paddle') {
-      ctx.fillStyle = '#e94560';
-      ctx.shadowColor = '#e94560';
-      ctx.shadowBlur = 15;
-      ctx.fill();
+    if (body.label === 'Circle Body') {
       ctx.shadowBlur = 0;
-    } else if (body.label === 'ball') {
-      ctx.fillStyle = '#fff';
-      ctx.shadowColor = '#fff';
-      ctx.shadowBlur = 20;
+      ctx.beginPath();
+      ctx.arc(body.position.x, body.position.y, 3, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
       ctx.fill();
-      ctx.shadowBlur = 0;
     }
   }
 
-  if (isLaunching && gameState === 'playing') {
-    ctx.setLineDash([6, 4]);
+  ctx.shadowBlur = 0;
+
+  if (dragBody) {
     ctx.beginPath();
-    ctx.moveTo(ball.position.x, ball.position.y);
-    ctx.lineTo(ball.position.x, ball.position.y + 60);
-    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-    ctx.lineWidth = 2;
+    ctx.moveTo(dragBody.position.x, dragBody.position.y);
+    const rect = canvas.getBoundingClientRect();
+    const mx = (lastMouseX ?? 0) - rect.left;
+    const my = (lastMouseY ?? 0) - rect.top;
+    ctx.lineTo(mx, my);
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
     ctx.stroke();
     ctx.setLineDash([]);
   }
 }
 
+let lastMouseX, lastMouseY;
+canvas.addEventListener('mousemove', (e) => {
+  lastMouseX = e.clientX;
+  lastMouseY = e.clientY;
+});
+
 function gameLoop() {
-  if (gameState === 'playing') {
-    Engine.update(engine, 1000 / 60);
-  }
+  Engine.update(engine, 1000 / 60);
   draw();
   requestAnimationFrame(gameLoop);
 }
 
-document.addEventListener('mousemove', (e) => {
-  if (gameState !== 'playing') return;
-  const rect = canvas.getBoundingClientRect();
-  const scaleX = CANVAS_W / rect.width;
-  const mx = (e.clientX - rect.left) * scaleX;
-  const clamped = Math.max(PADDLE_W / 2, Math.min(CANVAS_W - PADDLE_W / 2, mx));
-  Body.setPosition(paddle, { x: clamped, y: paddle.position.y });
-
-  if (isLaunching) {
-    Body.setPosition(ball, { x: clamped, y: ball.position.y });
-  }
-});
-
-document.addEventListener('click', () => {
-  if (gameState === 'playing' && isLaunching) {
-    launchBall();
-  }
-});
-
-document.getElementById('overlay-btn').addEventListener('click', () => {
-  document.getElementById('overlay').classList.add('hidden');
-  score = 0;
-  lives = 3;
-  gameState = 'playing';
-  document.getElementById('score').textContent = '0';
-  document.getElementById('lives').textContent = '3';
-  setup();
-  resetBall();
-});
-
-setup();
+createGround();
 gameLoop();
