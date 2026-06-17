@@ -195,7 +195,7 @@ document.getElementById('clear-btn').addEventListener('click', () => {
 });
 
 function updateCount() {
-  document.getElementById('count').textContent = `Objets: ${bodyCount}`;
+  document.getElementById('count').textContent = `Bodies: ${bodyCount}`;
 }
 
 function draw() {
